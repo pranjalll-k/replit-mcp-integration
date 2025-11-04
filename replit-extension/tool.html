@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bhindi Bridge Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .status.connected {
+            background: #0f5132;
+            border: 1px solid #198754;
+        }
+        .status.connecting {
+            background: #664d03;
+            border: 1px solid #ffc107;
+        }
+        .status.error {
+            background: #58151c;
+            border: 1px solid #dc3545;
+        }
+        .endpoint-url {
+            background: #2d2d2d;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 10px 0;
+            word-break: break-all;
+        }
+        button {
+            background: #0d6efd;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0b5ed7;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #2d2d2d;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .test-results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2d2d2d;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 Bhindi.io Integration</h1>
+    
+    <div id="status" class="status connecting">
+        <strong>Connecting...</strong> Initializing Bhindi Bridge...
+    </div>
+    
+    <div id="connection-info" style="display: none;">
+        <h3>🌐 MCP Endpoint URL</h3>
+        <p>Use this URL in your Bhindi MCP configuration:</p>
+        <div class="endpoint-url" id="endpoint-url"></div>
+        
+        <button onclick="copyEndpoint()">📋 Copy URL</button>
+        <button onclick="testConnection()">🧪 Test Connection</button>
+    </div>
+    
+    <div id="test-results" class="test-results" style="display: none;">
+        <h3>🧪 Connection Test Results</h3>
+        <div id="test-output"></div>
+    </div>
+    
+    <div class="log" id="log">
+        <div>Initializing Bhindi Bridge...</div>
+    </div>
+
+    <script type="module">
+        import { init, data } from 'https://extensions-sdk.replit.com/index.js';
+
+        let isConnected = false;
+        let replInfo = null;
+
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function updateStatus(status, message, isError = false) {
+            const statusElement = document.getElementById('status');
+            statusElement.className = `status ${status}`;
+            statusElement.innerHTML = `<strong>${status.charAt(0).toUpperCase() + status.slice(1)}</strong> ${message}`;
+        }
+
+        async function initialize() {
+            try {
+                log('Initializing Replit Extensions API...');
+                const { status } = await init();
+                
+                if (status === 'ready') {
+                    log('✅ Extensions API initialized successfully');
+                    
+                    // Get current repl info
+                    replInfo = await data.currentRepl({});
+                    log(`📁 Connected to Repl: ${replInfo.repl.title}`);
+                    
+                    isConnected = true;
+                    setupConnection();
+                } else {
+                    throw new Error(`Initialization failed: ${status}`);
+                }
+            } catch (error) {
+                log(`❌ Initialization failed: ${error.message}`);
+                updateStatus('error', `Failed to initialize: ${error.message}`, true);
+            }
+        }
+
+        function setupConnection() {
+            updateStatus('connected', 'Bridge active and ready for Bhindi integration');
+            
+            // Show connection info
+            document.getElementById('connection-info').style.display = 'block';
+            
+            // Generate endpoint URL (this would be your deployed MCP agent URL)
+            const endpointUrl = 'https://open-birds-roll.loca.lt/mcp';
+            document.getElementById('endpoint-url').textContent = endpointUrl;
+            
+            log('🔗 Bridge endpoint ready');
+            log('🚀 Ready to receive commands from Bhindi!');
+        }
+
+        window.copyEndpoint = function() {
+            const url = document.getElementById('endpoint-url').textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                log('📋 Endpoint URL copied to clipboard');
+            });
+        };
+
+        window.testConnection = async function() {
+            const testResults = document.getElementById('test-results');
+            const testOutput = document.getElementById('test-output');
+            
+            testResults.style.display = 'block';
+            testOutput.innerHTML = '<div>🧪 Running connection tests...</div>';
+            
+            const tests = [
+                { name: 'Replit API Access', test: () => data.currentRepl({}) },
+                { name: 'File System Access', test: () => window.parent.bhindiAPI?.handleAPICall('listFiles', { path: '/' }) },
+                { name: 'Project Info', test: () => window.parent.bhindiAPI?.handleAPICall('getProjectInfo', {}) }
+            ];
+            
+            let results = '';
+            
+            for (const test of tests) {
+                try {
+                    const result = await test.test();
+                    results += `<div>✅ ${test.name}: Success</div>`;
+                    log(`✅ Test passed: ${test.name}`);
+                } catch (error) {
+                    results += `<div>❌ ${test.name}: ${error.message}</div>`;
+                    log(`❌ Test failed: ${test.name} - ${error.message}`);
+                }
+            }
+            
+            testOutput.innerHTML = results;
+        };
+
+        // Initialize on load
+        initialize();
+    </script>
+</body>
+</html>

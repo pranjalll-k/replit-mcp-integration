@@ -1,0 +1,26 @@
+{
+  "name": "Bhindi Bridge Extension",
+  "description": "Real-time bridge between Bhindi.io AI and Replit workspace for seamless development workflows",
+  "version": "1.0.0",
+  "author": "Bhindi.io Team",
+  "website": "https://bhindi.io",
+  "permissions": [
+    "read",
+    "write", 
+    "exec"
+  ],
+  "tools": [
+    {
+      "name": "bhindi-bridge",
+      "title": "Bhindi Bridge",
+      "description": "Real-time bridge interface for Bhindi.io integration",
+      "filePath": "/src/App.jsx"
+    }
+  ],
+  "fileHandlers": [
+    {
+      "glob": "**/*",
+      "toolName": "bhindi-bridge"
+    }
+  ]
+}

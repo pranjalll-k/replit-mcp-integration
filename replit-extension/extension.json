@@ -1,0 +1,36 @@
+{
+  "name": "Bhindi.io Replit Bridge",
+  "description": "Connect your Replit workspace to Bhindi.io for AI-powered development",
+  "longDescription": "This extension enables seamless integration between your Replit workspace and Bhindi.io's AI platform. It allows Bhindi to read files, execute commands, manage projects, and deploy your code directly within Replit.",
+  "icon": "/icon.svg",
+  "website": "https://bhindi.io",
+  "authorEmail": "support@bhindi.io",
+  "scopes": [
+    {
+      "name": "read",
+      "reason": "Read project files and structure to provide context to Bhindi AI"
+    },
+    {
+      "name": "write-exec", 
+      "reason": "Create, modify files and execute deployment commands via Bhindi AI"
+    },
+    {
+      "name": "repldb:read",
+      "reason": "Store and retrieve Bhindi integration settings"
+    },
+    {
+      "name": "repldb:write",
+      "reason": "Save user preferences and configuration data"
+    }
+  ],
+  "background": {
+    "page": "/background.html"
+  },
+  "tools": [
+    {
+      "name": "Bhindi Bridge",
+      "handler": "/tool.html",
+      "icon": "/icon.svg"
+    }
+  ]
+}

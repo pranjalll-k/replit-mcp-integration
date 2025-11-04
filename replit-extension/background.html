@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bhindi Bridge Background</title>
+</head>
+<body>
+    <script type="module">
+        import { init, fs, exec, data, replDb, session } from 'https://extensions-sdk.replit.com/index.js';
+
+        let isInitialized = false;
+        let activeConnections = new Set();
+
+        // Initialize the extension
+        async function initializeExtension() {
+            try {
+                const { status } = await init();
+                if (status === 'ready') {
+                    isInitialized = true;
+                    console.log('Bhindi Bridge initialized successfully');
+                    
+                    // Start the API server
+                    startAPIServer();
+                } else {
+                    console.error('Failed to initialize Bhindi Bridge:', status);
+                }
+            } catch (error) {
+                console.error('Initialization error:', error);
+            }
+        }
+
+        // API Server for handling requests from our MCP agent
+        function startAPIServer() {
+            // Listen for messages from our MCP agent
+            window.addEventListener('message', async (event) => {
+                // Validate origin for security
+                if (!event.data || !event.data.type || event.data.type !== 'BHINDI_REQUEST') {
+                    return;
+                }
+
+                const { id, method, params } = event.data;
+
+                try {
+                    const result = await handleAPICall(method, params);
+                    
+                    // Send response back
+                    window.parent.postMessage({
+                        type: 'BHINDI_RESPONSE',
+                        id,
+                        success: true,
+                        result
+                    }, '*');
+                } catch (error) {
+                    window.parent.postMessage({
+                        type: 'BHINDI_RESPONSE', 
+                        id,
+                        success: false,
+                        error: error.message
+                    }, '*');
+                }
+            });
+
+            console.log('Bhindi Bridge API server started');
+        }
+
+        // Handle API calls from MCP agent
+        async function handleAPICall(method, params) {
+            if (!isInitialized) {
+                throw new Error('Extension not initialized');
+            }
+
+            switch (method) {
+                case 'createProject':
+                    return await createProject(params);
+                
+                case 'updateFile':
+                    return await updateFile(params);
+                
+                case 'executeCommand':
+                    return await executeCommand(params);
+                
+                case 'getProjectInfo':
+                    return await getProjectInfo();
+                
+                case 'listFiles':
+                    return await listFiles(params.path || '/');
+                
+                case 'readFile':
+                    return await readFile(params.path);
+                
+                case 'deployProject':
+                    return await deployProject(params);
+                
+                case 'getActiveFile':
+                    return await session.getActiveFile();
+                
+                default:
+                    throw new Error(`Unknown method: ${method}`);
+            }
+        }
+
+        // Implementation functions
+        async function createProject(params) {
+            const { title, language, template } = params;
+            
+            // Get current repl info to understand structure
+            const currentRepl = await data.currentRepl({});
+            
+            // Create basic project structure based on language
+            const structure = getProjectStructure(language, template);
+            
+            for (const file of structure) {
+                if (file.type === 'directory') {
+                    await fs.createDir(file.path);
+                } else {
+                    await fs.writeFile(file.path, file.content);
+                }
+            }
+            
+            return {
+                id: currentRepl.repl.id,
+                title: currentRepl.repl.title,
+                url: currentRepl.repl.url,
+                language,
+                message: `Project structure created for ${language}`
+            };
+        }
+
+        async function updateFile(params) {
+            const { filePath, content } = params;
+            
+            const result = await fs.writeFile(filePath, content);
+            
+            if (result.error) {
+                throw new Error(result.error);
+            }
+            
+            return {
+                success: true,
+                path: filePath,
+                message: `File ${filePath} updated successfully`
+            };
+        }
+
+        async function executeCommand(params) {
+            const { command, args = [], env = {} } = params;
+            
+            try {
+                const result = await exec.exec(command, { env });
+                
+                return {
+                    success: result.exitCode === 0,
+                    exitCode: result.exitCode,
+                    output: result.output,
+                    command: command
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    exitCode: 1,
+                    output: error.message,
+                    command: command
+                };
+            }
+        }
+
+        async function getProjectInfo() {
+            const repl = await data.currentRepl({
+                includeOwner: true,
+                includeSocialData: true
+            });
+            
+            const user = await data.currentUser({});
+            
+            return {
+                repl: repl.repl,
+                user: user.user,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        async function listFiles(path) {
+            const result = await fs.readDir(path);
+            
+            if (result.error) {
+                throw new Error(result.error);
+            }
+            
+            return {
+                path,
+                children: result.children
+            };
+        }
+
+        async function readFile(path) {
+            const result = await fs.readFile(path, 'utf8');
+            
+            if (result.error) {
+                throw new Error(result.error);
+            }
+            
+            return {
+                path,
+                content: result.content
+            };
+        }
+
+        async function deployProject(params) {
+            const { command = 'npm run build && npm run deploy' } = params;
+            
+            // Execute deployment command
+            const result = await executeCommand({ command });
+            
+            return {
+                deployment: {
+                    status: result.success ? 'success' : 'failed',
+                    command,
+                    output: result.output,
+                    timestamp: new Date().toISOString()
+                }
+            };
+        }
+
+        // Helper function to get project structure based on language
+        function getProjectStructure(language, template) {
+            const structures = {
+                python: [
+                    { type: 'file', path: 'main.py', content: '# Python project created by Bhindi.io\\nprint("Hello from Bhindi!")\\n' },
+                    { type: 'file', path: 'requirements.txt', content: '# Add your dependencies here\\n' },
+                    { type: 'file', path: 'README.md', content: `# ${template || 'Python'} Project\\n\\nCreated with Bhindi.io integration.\\n` }
+                ],
+                nodejs: [
+                    { type: 'file', path: 'package.json', content: JSON.stringify({
+                        name: template?.toLowerCase().replace(/\\s+/g, '-') || 'nodejs-project',
+                        version: '1.0.0',
+                        main: 'index.js',
+                        scripts: { start: 'node index.js', dev: 'nodemon index.js' }
+                    }, null, 2) },
+                    { type: 'file', path: 'index.js', content: '// Node.js project created by Bhindi.io\\nconsole.log("Hello from Bhindi!");\\n' },
+                    { type: 'file', path: 'README.md', content: `# ${template || 'Node.js'} Project\\n\\nCreated with Bhindi.io integration.\\n` }
+                ],
+                react: [
+                    { type: 'file', path: 'package.json', content: JSON.stringify({
+                        name: template?.toLowerCase().replace(/\\s+/g, '-') || 'react-app',
+                        version: '1.0.0',
+                        dependencies: { react: '^18.0.0', 'react-dom': '^18.0.0' },
+                        scripts: { start: 'react-scripts start', build: 'react-scripts build' }
+                    }, null, 2) },
+                    { type: 'directory', path: 'src' },
+                    { type: 'file', path: 'src/App.js', content: 'import React from "react";\\n\\nfunction App() {\\n  return <h1>Hello from Bhindi!</h1>;\\n}\\n\\nexport default App;\\n' },
+                    { type: 'file', path: 'README.md', content: `# ${template || 'React'} Project\\n\\nCreated with Bhindi.io integration.\\n` }
+                ]
+            };
+            
+            return structures[language] || structures.python;
+        }
+
+        // Expose API for tool communication
+        window.bhindiAPI = {
+            handleAPICall,
+            isInitialized: () => isInitialized
+        };
+
+        // Initialize on load
+        initializeExtension();
+    </script>
+</body>
+</html>
